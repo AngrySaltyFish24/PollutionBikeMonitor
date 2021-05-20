@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+
+<head>
+	  <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+	  <link href="css/bootstrap.min.css" rel="stylesheet" media="screen">
+	  <link href="style.css" rel="stylesheet" media="screen">
+</head>
+
+<body>
+
+	  <div class="container">
+		    <h1>Sniffer</h1>
+
+		    <div id="map" style="width:100%;height:500px"></div>
+
+		    <div id="overlayInterface">
+            <ul id="checkboxes">
+			          <li><input type="checkbox" onclick="this.parentNode.parentNode.toggleOverlays(this)">CO</input></li>
+			          <li><input type="checkbox" onclick="this.parentNode.parentNode.toggleOverlays(this)">NOX</input></li>
+			          <li><input type="checkbox" onclick="this.parentNode.parentNode.toggleOverlays(this)">sound</input></li>
+            </ul>
+		    </div>
+
+		    <div id="upload-interface">
+			      <h4>Data Upload instructions</h4>
+			      <ol>
+				        <li>First plug in the device into the usb port</li>
+				        <li>You then need to click the browse button below</li>
+				        <li>Then select the file you wish to upload and click ok</li>
+				        <li>Then click the upload button beside it</li>
+			      </ol>
+
+			      <form action="#" id="form" method="POST">
+				        <input type="file" id="file-select" name="data" multiple/>
+				        <button type="submit" id="upload-button">Upload</button>
+			      </form>
+		    </div>
+	  </div>
+
+	  <script type="text/javascript">
+		 var form = document.getElementById("form");
+		 var fileSelect = document.getElementById("file-select");
+		 var uploadButton = document.getElementById("upload-button");
+
+		 form.onsubmit = function(event) {
+			   event.preventDefault();
+
+			   uploadButton.innerHtml = "Uploading";
+
+			   var files = fileSelect.files;
+			   var formData = new FormData();
+
+			   for (var i = 0; i < files.length; i++)
+				     formData.append("data", files[i], files[i].name);
+
+			   var xhttp = new XMLHttpRequest();
+			   xhttp.open("POST", "dataUpload", true);
+
+			   xhttp.onload = function() {
+				     if (xhttp.status == 200)
+					       uploadButton.innerHtml = "Upload";
+			   }
+
+			   xhttp.send(formData);
+		 }
+
+		 function initMap() {
+			   var coordinates = {};
+			   var overlays = {};
+         var routes = {};
+			   var mapCanvas = document.getElementById("map");
+			   var mapOptions = {
+				     center: new google.maps.LatLng(52.170573, 0.111123),
+				     zoom: 0
+			   }
+			   var map = new google.maps.Map(mapCanvas, mapOptions);
+
+			   getPoints();
+
+			   function generateOverlays() {
+				     var gradients = {};
+				     var colours = [
+					       "0, 255, 0",
+					       "255, 0, 0",
+					       "0, 255, 0",
+                 "0, 0, 255"
+				     ];
+
+             for (var routeID in coordinates) {
+                 var colourCounter = 0;
+                 for (var pollutant in coordinates[routeID][0]["pollutants"]) {
+					           gradients[pollutant] = [];
+                     colourCounter++;
+					           for (var i = 0.0; i < 1; i += 0.1)
+						             gradients[pollutant].push("rgba(" + colours[colourCounter] + "," + i + ")");
+
+					           var heatmap = new google.maps.visualization.HeatmapLayer({
+						             data: coordinates[routeID],
+						             dissipating: true,
+						             opacity: 0.6-(colourCounter/10),
+						             gradient: gradients[pollutant],
+						             radius: (colourCounter * 5),
+						             map: map
+					           });
+					           overlays[pollutant] = heatmap;
+				         }
+
+                 routes[routeID] = overlays;
+             }
+
+				     var checkboxDiv = document.getElementById("checkboxes");
+
+				     for (var i = 0; i < checkboxDiv.childElementCount; i++)
+					       checkboxDiv.children[i].children[0].checked = true;
+
+				     checkboxDiv.toggleOverlays = function(element) {
+					       var pollutant = element.nextSibling.textContent.trim();
+                 for (var id in coordinates) {
+					           routes[id][pollutant].set("opacity", routes[id][pollutant].get("opacity") > 0 ? 0 : 0.3);
+                 }
+				     }
+			   }
+
+
+			   function getPoints() {
+				     var xhttp = new XMLHttpRequest();
+				     xhttp.onreadystatechange = function() {
+					       if (this.readyState == 4 && this.status == 200) {
+						         var textData = xhttp.responseText
+							                           .replace("]", "")
+							                           .replace("[", "")
+							                           .split("),");
+
+						         for (var i = 0; i < textData.length; i++) {
+							           textData[i] = textData[i].replace("(", ""); //:TODO make this so you don't need the iterator
+                         textData[i] = textData[i].replace(")", ""); //:TODO make this so you don't need the iterator
+
+                         var values = textData[i].split(",");
+                         values[5] = values[5].trim();
+
+                         if (typeof coordinates[values[5]] == "undefined")
+                             coordinates[values[5]] = [];
+							           coordinates[values[5]].push({
+								             location: new google.maps.LatLng(parseFloat(values[1]), parseFloat(values[0])),
+								             weight: generateWeight(values[2], values[3], values[4]),
+                             routeID: values[5],
+								             pollutants: {
+									               "sound": values[2],
+									               "CO": values[3],
+                                 "NOX": values[4]
+								             }
+							           });
+						         }
+						         mapInteractivity();
+						         generateOverlays();
+					       }
+				     }
+				     xhttp.open('GET', 'datafromDB', true);
+             xhttp.setRequestHeader("Content-Type", "application/json");
+				     xhttp.send();
+			   }
+
+         function generateWeight (sound, CO, NOX) {
+             var percentageSound = (sound/90.7461139896373)*100
+             var percentageNOX = (NOX/1.4849881485383196)*100
+             var percentageCO = (CO/454.96)*100
+
+             return (percentageSound+percentageNOX+percentageCO)/3;
+         }
+
+			   function mapInteractivity() {
+				     var info = new google.maps.InfoWindow();
+
+				     for (var i = 0; i < coordinates.length; i++) {
+					       var marker = new google.maps.Marker({
+						         position: coordinates[i]["location"],
+						         pollutants: coordinates[i]["pollutants"],
+						         opacity: 1,
+						         map: map
+					       });
+					       google.maps.event.addListener(marker, "mouseover", function(event) {
+						         var contentString = "";
+						         for (var pollutant in this["pollutants"])
+							           contentString += "<h4>" + pollutant + ": " + this["pollutants"][pollutant];
+
+						         info.setContent(contentString);
+						         info.open(map, this);
+					       });
+					       google.maps.event.addListener(marker, "mouseout", function(event) {
+						         info.close();
+					       });
+				     }
+
+             for (var id in coordinates) {
+
+				         for (var i = 0; i < coordinates[id].length; i++) {
+
+					           var marker = new google.maps.Marker({
+						             position: coordinates[id][i]["location"],
+						             pollutants: coordinates[id][i]["pollutants"],
+                         routeID: coordinates[id][i]["routeID"],
+						             opacity: 0,
+						             map: map
+					           });
+					           google.maps.event.addListener(marker, "mouseover", function(event) {
+						             var contentString = "";
+						             for (var pollutant in this["pollutants"]) {
+							               contentString += "<h4>" + pollutant + ": " + this["pollutants"][pollutant];
+                             if (routes[this["routeID"]][pollutant].get("opacity") != 0)
+                                 routes[this["routeID"]][pollutant].set("opacity", 0.6);
+                         }
+
+
+						             info.setContent(contentString);
+						             info.open(map, this);
+					           });
+					           google.maps.event.addListener(marker, "mouseout", function(event) {
+                         for (var pollutant in this["pollutants"]) {
+                             if (routes[this["routeID"]][pollutant].get("opacity") != 0)
+                                 routes[this["routeID"]][pollutant].set("opacity", 0.3);
+                         }
+						             info.close();
+					           });
+				         }
+             }
+
+			   }
+		 }
+	  </script>
+	  <script src="js/bootstrap.min.js"></script>
+	  <script src="https://maps.googleapis.com/maps/api/js?&libraries=visualization&callback=initMap"></script>
+</body>

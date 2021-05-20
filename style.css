@@ -1,0 +1,38 @@
+body {
+    background-image: url(http://pre03.deviantart.net/7639/th/pre/i/2015/121/6/7/omotesando__harajuku_tokyo_by_theblindalley-d2s7ipo.png);
+    background-size: cover;
+    background-repeat: no-repeat;
+}
+h1 {
+    margin-top: 100px;
+}
+input[type=checkbox] {
+    margin-bottom: 10px;
+    margin-right: 5px;
+}
+.container {
+    padding-left: 100px;
+    padding-right: 100px;
+    border-radius: 10px / 10px ;
+    background-color: white;
+    margin: auto;
+    margin-top: 50px;
+    margin-bottom: 10px;
+    max-width: 700px;
+}
+#upload-interface {
+    float: right;
+}
+#overlayInterface {
+    float: left;
+    width: 150px;
+    height: 180px
+}
+#overlayInterface ul {
+    margin: 0;
+    list-style: none;
+    float: left;
+}
+#map {
+    margin-bottom: 50px;
+}
